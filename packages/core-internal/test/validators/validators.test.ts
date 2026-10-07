@@ -812,6 +812,33 @@ describe('$schema dialect dispatch', () => {
         expect(v(PREFIX_ITEMS_BAD).valid).toBe(true);
     });
 
+    it('AJV: non-standard "json" format is registered as a no-op on every default engine', () => {
+        // Regression test for #2854: third-party schemas (e.g. Notion MCP's
+        // `"format": "json"` properties) use a format that is neither JSON Schema
+        // nor ajv-formats. The default engines register it as a no-op, so such
+        // schemas compile without "unknown format" warnings and values still
+        // validate (the format itself checks nothing).
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            const schemas = [
+                { type: 'string', format: 'json' },
+                { $schema: 'https://json-schema.org/draft/2019-09/schema', type: 'string', format: 'json' },
+                { $schema: DRAFT_07_URI, type: 'string', format: 'json' }
+            ] as Array<JsonSchemaType>;
+            for (const schema of schemas) {
+                const v = new AjvJsonSchemaValidator().getValidator(schema);
+                expect(v('{"a":1}').valid).toBe(true);
+                expect(v(123).valid).toBe(false);
+            }
+            const unknownFormatWarnings = warn.mock.calls.filter((args: unknown[]) =>
+                args.some(arg => String(arg).includes('unknown format'))
+            );
+            expect(unknownFormatWarnings).toEqual([]);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
     it('CfWorker: explicit {draft} bypasses the $schema check (caller owns dialect)', () => {
         const custom = new CfWorkerJsonSchemaValidator({ draft: '7' });
         expect(() => custom.getValidator(prefixItemsSchema(DRAFT_07_URI))).not.toThrow();
