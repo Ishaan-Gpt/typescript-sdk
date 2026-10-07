@@ -35,6 +35,10 @@ function createDefaultAjvInstance(engineClass: typeof Ajv2020 | typeof Ajv2019 |
         allErrors: true
     });
     addFormats(ajv);
+    // Register `json` as a no-op format (#2854) so third-party schemas using it compile without "unknown format" warnings; the format itself performs no validation.
+    if ('addFormat' in ajv && typeof ajv.addFormat === 'function') {
+        (ajv as { addFormat: (name: string, format: unknown) => void }).addFormat('json', true);
+    }
     return ajv;
 }
 
